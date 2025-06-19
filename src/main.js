@@ -18,6 +18,26 @@ let takeoffComplete = false;
 let takeoffThrottle = 0;
 let controlMode = 'autoTakeoff'; // 'autoTakeoff', 'auto', 'pid', 'manual'
 
+// Drone state variables
+let drone = null;
+let droneVelocity = new THREE.Vector3();
+let droneYaw = 0;
+let dronePitch = 0;
+let droneRoll = 0;
+let droneBoost = false;
+let droneAscend = false;
+let droneDescend = false;
+let droneControl = {
+  forward: false, backward: false, left: false, right: false,
+  yawLeft: false, yawRight: false, up: false, down: false, boost: false
+};
+let droneAutoMode = false;
+let droneAIInterval = null;
+let droneAIFeedbackLog = [];
+let droneTakeoffComplete = false;
+let droneTakeoffTarget = 5; // units
+let droneAIControlDeltas = { pitch: 0, roll: 0, yaw: 0, throttle: 0 };
+
 // Infinite procedural ground tiling
 let groundTiles = [];
 const groundTileSize = 40;
@@ -115,6 +135,84 @@ function startSimulation(vehicleType = 'plane') {
 
 // Show the start button overlay on page load
 window.addEventListener('DOMContentLoaded', showStartButton);
+
+// --- Drone Update Function ---
+function updateDrone(dt) {
+  if (!drone) return;
+  // Auto takeoff logic
+  if (!droneTakeoffComplete) {
+    droneVelocity.set(0, 0, 0);
+    drone.position.y += 2.5 * dt;
+    if (drone.position.y >= droneTakeoffTarget) {
+      drone.position.y = droneTakeoffTarget;
+      droneTakeoffComplete = true;
+    }
+    return;
+  }
+  // Parameters
+  const baseSpeed = 6;
+  const boostMult = 2.2;
+  const ascendSpeed = 5;
+  const yawSpeed = 1.8;
+  const pitchSpeed = 1.2;
+  const rollSpeed = 1.2;
+  let speed = baseSpeed * (droneControl.boost ? boostMult : 1);
+  // Movement
+  let move = new THREE.Vector3();
+  if (droneControl.forward) move.z -= 1;
+  if (droneControl.backward) move.z += 1;
+  if (droneControl.left) move.x -= 1;
+  if (droneControl.right) move.x += 1;
+  move.normalize();
+  // Up/down
+  let upDown = 0;
+  if (droneControl.up) upDown += 1;
+  if (droneControl.down) upDown -= 1;
+  // Yaw
+  if (droneControl.yawLeft) droneYaw += yawSpeed * dt;
+  if (droneControl.yawRight) droneYaw -= yawSpeed * dt;
+  // Pitch/roll for visual effect
+  dronePitch = move.z * pitchSpeed * (move.length() > 0 ? 1 : 0);
+  droneRoll = move.x * rollSpeed * (move.length() > 0 ? 1 : 0);
+  // Apply movement in local space
+  let localMove = move.clone().applyAxisAngle(new THREE.Vector3(0,1,0), droneYaw);
+  droneVelocity.lerp(localMove.multiplyScalar(speed), 0.2);
+  drone.position.add(droneVelocity.clone().multiplyScalar(dt));
+  drone.position.y += upDown * ascendSpeed * dt;
+  // Clamp to ground
+  if (drone.position.y < 0.5) drone.position.y = 0.5;
+  // Set rotation
+  drone.rotation.set(dronePitch, droneYaw, droneRoll);
+}
+
+// --- Drone AI Control Function ---
+function applyDroneAIControl() {
+  if (!droneAIControlDeltas) return;
+  
+  // Apply AI control deltas to drone movement
+  droneControl.forward = droneAIControlDeltas.pitch < -0.1;
+  droneControl.backward = droneAIControlDeltas.pitch > 0.1;
+  droneControl.left = droneAIControlDeltas.roll < -0.1;
+  droneControl.right = droneAIControlDeltas.roll > 0.1;
+  droneControl.yawLeft = droneAIControlDeltas.yaw < -0.1;
+  droneControl.yawRight = droneAIControlDeltas.yaw > 0.1;
+  
+  // Handle vertical movement
+  if (droneAIControlDeltas.throttle > 0.1) {
+    droneControl.up = true;
+    droneControl.down = false;
+  } else if (droneAIControlDeltas.throttle < -0.1) {
+    droneControl.up = false;
+    droneControl.down = true;
+  } else {
+    droneControl.up = false;
+    droneControl.down = false;
+  }
+  
+  // Optional boost based on AI suggestion
+  droneControl.boost = Math.abs(droneAIControlDeltas.pitch) > 0.3 || 
+                      Math.abs(droneAIControlDeltas.roll) > 0.3;
+}
 
 function addTrees(scene, count = 400) {
   for (let i = 0; i < count; i++) {
@@ -708,6 +806,14 @@ window.addEventListener('keydown', (e) => {
     sendFlightDataToAI(plainData, 'control');
     alert('Forced AI control call sent!');
   }
+  if (e.code === 'KeyI') {
+    const existing = document.getElementById('instructions-overlay');
+    if (existing) {
+      existing.remove();
+    } else {
+      showInstructions(drone ? 'drone' : 'plane');
+    }
+  }
 });
 
 function createInfiniteGround(scene, aircraft) {
@@ -810,20 +916,6 @@ function createDroneMesh() {
   return group;
 }
 
-// Drone state
-let drone = null;
-let droneVelocity = new THREE.Vector3();
-let droneYaw = 0;
-let dronePitch = 0;
-let droneRoll = 0;
-let droneBoost = false;
-let droneAscend = false;
-let droneDescend = false;
-let droneControl = {
-  forward: false, backward: false, left: false, right: false,
-  yawLeft: false, yawRight: false, up: false, down: false, boost: false
-};
-
 function setupDroneControls() {
   window.addEventListener('keydown', droneKeyHandler);
   window.addEventListener('keyup', droneKeyHandler);
@@ -843,8 +935,6 @@ function droneKeyHandler(e) {
     case 'KeyC': droneControl.yawRight = down; break;
   }
 }
-
-
 
 // --- Drone Info Panel ---
 function createDroneInfoPanel() {
@@ -872,11 +962,6 @@ function createDroneInfoPanel() {
 }
 
 // --- Drone AI Integration ---
-let droneAutoMode = false;
-let droneAIInterval = null;
-let droneAIFeedbackLog = [];
-let droneAIControlDeltas = { pitch: 0, roll: 0, yaw: 0, throttle: 0 };
-
 function setDroneAutoMode(enabled) {
   droneAutoMode = enabled;
   if (droneAutoMode) {
@@ -884,7 +969,7 @@ function setDroneAutoMode(enabled) {
       if (!drone || !droneTakeoffComplete) return;
       const data = getDroneState();
       sendDroneStateToAI(data, 'control');
-    }, 1800000); // every 30 minutes (same as aircraft)
+    }, 8000); // Update every 8 seconds
   } else if (droneAIInterval) {
     clearInterval(droneAIInterval);
     droneAIInterval = null;
@@ -1029,6 +1114,23 @@ function createSimOverlay(vehicleType) {
     overlay.style.overflow = 'auto';
     overlay.style.boxShadow = '0 4px 24px rgba(0,0,0,0.25)';
     overlay.style.userSelect = 'none';
+
+    // Add "Press I for Instructions" message
+    const instructionsHint = document.createElement('div');
+    instructionsHint.id = 'instructions-hint';
+    instructionsHint.style.position = 'fixed';
+    instructionsHint.style.bottom = '20px';
+    instructionsHint.style.left = '50%';
+    instructionsHint.style.transform = 'translateX(-50%)';
+    instructionsHint.style.background = 'rgba(0,0,0,0.7)';
+    instructionsHint.style.color = '#fff';
+    instructionsHint.style.padding = '8px 16px';
+    instructionsHint.style.borderRadius = '20px';
+    instructionsHint.style.fontSize = '14px';
+    instructionsHint.style.zIndex = 2000;
+    instructionsHint.textContent = 'Press I for Instructions';
+    document.body.appendChild(instructionsHint);
+
     // Draggable
     overlay.onmousedown = function(e) {
       if (e.target !== overlay) return;
@@ -1181,6 +1283,69 @@ init = function(params, vehicleType = 'plane') {
   createSimOverlay(vehicleType);
 };
 
-// --- Drone Auto Takeoff ---
-let droneTakeoffComplete = false;
-let droneTakeoffTarget = 5; // units
+// Add instructions overlay functionality
+function showInstructions(vehicleType) {
+  const instructionsOverlay = document.createElement('div');
+  instructionsOverlay.id = 'instructions-overlay';
+  instructionsOverlay.style.position = 'fixed';
+  instructionsOverlay.style.top = '50%';
+  instructionsOverlay.style.left = '50%';
+  instructionsOverlay.style.transform = 'translate(-50%, -50%)';
+  instructionsOverlay.style.background = 'rgba(0,0,0,0.95)';
+  instructionsOverlay.style.color = '#fff';
+  instructionsOverlay.style.padding = '24px';
+  instructionsOverlay.style.borderRadius = '12px';
+  instructionsOverlay.style.zIndex = 4000;
+  instructionsOverlay.style.maxWidth = '600px';
+  instructionsOverlay.style.maxHeight = '80vh';
+  instructionsOverlay.style.overflow = 'auto';
+  instructionsOverlay.style.boxShadow = '0 4px 32px rgba(0,0,0,0.5)';
+
+  const content = vehicleType === 'drone' ? `
+    <h2 style="margin-top:0">Drone Controls</h2>
+    <div style="margin:20px 0">
+      <b>Movement</b><br>
+      • WASD/Arrows: Move horizontally<br>
+      • Q/E: Up/Down<br>
+      • Z/C: Yaw Left/Right<br>
+      • Shift: Boost mode<br>
+      • Space: Hover (coming soon)<br><br>
+      <b>Features</b><br>
+      • Auto takeoff to safe altitude<br>
+      • AI assistance available<br>
+      • Smooth camera following<br>
+      • Real-time telemetry
+    </div>
+  ` : `
+    <h2 style="margin-top:0">Aircraft Controls</h2>
+    <div style="margin:20px 0">
+      <b>Flight Controls</b><br>
+      • WASD/Arrows: Pitch and Roll<br>
+      • +/-: Throttle control<br>
+      • E: Toggle engine<br><br>
+      <b>AI & Automation</b><br>
+      • \\: Toggle AI assistance<br>
+      • /: Switch to manual mode<br>
+      • Auto takeoff and landing<br><br>
+      <b>Data & Logging</b><br>
+      • L: Export flight data<br>
+      • J: Export AI feedback log<br>
+      • K: Request AI feedback<br>
+      • H: Manual log entry<br>
+      • C: Force AI control update
+    </div>
+  `;
+
+  instructionsOverlay.innerHTML = `
+    ${content}
+    <div style="text-align:center;margin-top:20px">
+      <button onclick="this.parentElement.parentElement.remove()" 
+              style="background:#444;color:#fff;border:none;padding:8px 24px;
+                     border-radius:6px;cursor:pointer;font-size:14px">
+        Close (or press I)
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(instructionsOverlay);
+}
