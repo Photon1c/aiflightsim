@@ -1,4 +1,4 @@
-# ☁️ ✈️ ☁️ AI Flight Simulator ☁️ ✈️ ☁️ \
+# ☁️ ✈️ ☁️ AI Flight Simulator Version 1 ☁️ ✈️ ☁️ \
 
 The live demo is now available [here](https://aiflightsim.netlify.app). Note that the AI backend *is not available* for the live demo.  
 
