@@ -1,4 +1,6 @@
-# ☁️ ✈️ ☁️ AI Flight Simulator ☁️ ✈️ ☁️ 
+# ☁️ ✈️ ☁️ AI Flight Simulator ☁️ ✈️ ☁️ \
+
+The live demo is now available [here](https://aiflightsim.netlify.app). Note that the AI backend *is not available* for the live demo.  
 
 A modern web-based flight simulator with AI assistance, featuring both airplane and drone modes.
 
