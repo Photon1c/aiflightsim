@@ -1,0 +1,17 @@
+🚀 Project Kickoff: Initialized Three.js flight simulator project
+
+🛩️ Plane Mode: Implemented realistic aircraft model, flight physics, and chase camera
+
+🌲 Procedural Scenery: Added infinite ground, trees, and clouds
+
+🎛️ PID Controllers: Live-tunable pitch, roll, yaw, and throttle PIDs with GUI
+
+🧠 AI Integration: Connected frontend to backend for AI-assisted flight and feedback
+
+📊 Logging: Added exportable flight and AI feedback logs
+
+🛫 Auto Takeoff & Landing: Implemented auto takeoff, landing, and clear control modes
+
+🤖 Drone Mode: Added selectable drone with arcade controls and custom model
+
+🎨 UI Polish: Added start overlay, vehicle selection, and stylish title

@@ -1,0 +1,19 @@
+{
+  "aircraft": {
+    "label": "GOOG",
+    "color": "#00ffcc"
+  },
+  "altimeter": {
+    "unit": "dollars",
+    "baseElevation": 0,
+    "scaleFactor": 100
+  },
+  "controls": {
+    "pitchSpeed": 0.01,
+    "yawSpeed": 0.01,
+    "rollSpeed": 0.02,
+    "throttleIncrement": 0.01,
+    "numTrees": 400,
+    "numClouds": 30
+  }
+}
