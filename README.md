@@ -77,6 +77,7 @@ The simulator connects to a local AI backend server for assistance:
 - Provides real-time flight suggestions
 - Logs flight data and AI feedback
 - Supports both aircraft and drone modes
+- Simple ```node server.js``` command to deploy backend after ensuring .env file with OpenAI API key exists
 
 ## Development
 
